@@ -1,20 +1,38 @@
-#![no_std]
 #![no_main]
+#![no_std]
 
-// pick a panicking behavior
-extern crate panic_halt; // you can put a breakpoint on `rust_begin_unwind` to catch panics
-// extern crate panic_abort; // requires nightly
-// extern crate panic_itm; // logs messages over ITM; requires ITM support
-// extern crate panic_semihosting; // logs messages to the host stderr; requires a debugger
+use panic_halt as _;
 
-use cortex_m::asm;
+use stm32f0xx_hal as hal;
+
+use crate::hal::{prelude::*, stm32};
+
 use cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
-    asm::nop(); // To not have main optimize to abort in release mode, remove when you add code
+    if let Some(mut p) = stm32::Peripherals::take() {
+        let mut led = cortex_m::interrupt::free(|cs| {
+            let mut rcc = p.RCC.configure().sysclk(8.mhz()).freeze(&mut p.FLASH);
+
+            let gpioc= p.GPIOC.split(&mut rcc);
+
+            // (Re-)configure PA1 as output
+            gpioc.pc8.into_push_pull_output(cs)
+        });
+
+        loop {
+            // Turn PA1 on a million times in a row
+            for _ in 0..1000 {
+                led.set_high().ok();
+            }
+            // Then turn PA1 off a million times in a row
+            for _ in 0..1000 {
+                led.set_low().ok();
+            }
+        }
+    }
 
     loop {
-        // your code goes here
     }
 }
