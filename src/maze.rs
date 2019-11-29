@@ -6,8 +6,8 @@ use rand::{Rng, SeedableRng};
 
 #[derive(Copy, Clone)]
 pub struct Point {
-	x: u8,
-	y: u8,
+	pub x: u8,
+	pub y: u8,
 }
 impl Point {
 	fn dir(&self, direction: Direction) -> Option<Point>{
@@ -43,7 +43,7 @@ impl BitMap {
 		};
 		maze
 	}
-	fn get(&self, location: Point) -> bool {
+	pub(crate) fn get(&self, location: Point) -> bool {
 		let actual_index = location.x >> 3;
 		let index_within_byte = location.x & 0b111;
 		let byte = self.content[location.y as usize][actual_index as usize];
@@ -183,11 +183,7 @@ impl MazeGenerator {
 
 	pub fn dummy_generate(&mut self) -> Maze {
 		let mut maze = Maze::new();
-		for i in 0 .. 10 {
-			let x: u8 = MazeGenerator::random();
-			let y: u8 = MazeGenerator::random();
-			maze.bitmap_left.set(Point { x: x >> 5, y: y >> 5}, false);
-		}
+		maze.bitmap_left.set(Point { x: 10, y: 0}, false);
 		maze
 	}
 

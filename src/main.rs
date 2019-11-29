@@ -8,9 +8,6 @@ mod hub;
 use panic_halt as _;
 
 use stm32f0xx_hal as hal;
-use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{Circle, Rectangle, Triangle};
 use crate::hal::{prelude::*, stm32, serial, delay::Delay, i2c, prelude::*,};
 
 //use crate::maze::{Maze, MazeGenerator};
@@ -22,6 +19,7 @@ use core::fmt::Write;
 use ssd1306::prelude::*;
 use ssd1306::Builder;
 use crate::hal::dac::*;
+use crate::maze::Point;
 
 
 #[entry]
@@ -74,18 +72,19 @@ fn main() -> ! {
     // keep row selection port enabled
     port.row_selection.b.set_low().ok();
     loop {
-        led_green.toggle().ok();
         for row in 0..32 {
-            led_blue.toggle().ok();
-
             if row % 4 == 0 { // top walls
-                for col in 0 .. 128 {
-                    port.clock.set_high().ok();
-                    port.data_upper.r.set_high().ok();
-                    port.data_lower.r.set_high().ok();
-                    port.data_upper.g.set_low().ok();
-                    port.data_lower.g.set_low().ok();
-                    port.clock.set_low().ok();
+                for col in 0..32 {
+                    let mut data: u16 = 0;
+                    if maze.bitmap_top.get(Point{ x: col, y: row/4 }) {
+                        data |= 0b100000;
+                    }
+                    if maze.bitmap_top.get(Point{ x: col, y: (row/4) + 8}) {
+                        data |= 0b000100;
+                    }
+                    for col in 0 .. 4 {
+                        port.next_pixel(data);
+                    }
                 }
                 /*
                 for value in maze.bitmap_top.row_iter(row) {
@@ -101,64 +100,25 @@ fn main() -> ! {
                 */
             } else { // side walls
                 for col in 0 .. 32 {
-                    port.clock.set_high().ok();
-                    port.data_upper.r.set_high().ok();
-                    port.data_lower.r.set_high().ok();
-                    port.data_upper.g.set_low().ok();
-                    port.data_lower.g.set_low().ok();
-                    port.clock.set_low().ok();
+                    let mut data: u16 = 0;
+                    if maze.bitmap_left.get(Point{ x: col, y: row/4 }) {
+                        data |= 0b100000;
+                    }
+                    if maze.bitmap_left.get(Point{ x: col, y: (row/4) + 8}) {
+                        data |= 0b000100;
+                    }
+                    port.next_pixel(data);
 
                     for _ in 0 .. 3 {
-                        port.clock.set_high().ok();
-                        port.data_upper.r.set_low().ok();
-                        port.data_lower.r.set_low().ok();
-                        port.data_upper.g.set_low().ok();
-                        port.data_lower.g.set_low().ok();
-                        port.clock.set_low().ok();
+                        port.next_pixel(0);
                     }
                 }
-                /*
-                for value in maze.bitmap_left.row_iter(row) {
-                    port.clock.set_high().ok();
-                    port.data_upper.r.set_low().ok();
-                    port.data_lower.r.set_high().ok();
-                    port.data_upper.g.set_low().ok();
-                    port.data_lower.g.set_low().ok();
-                    port.clock.set_low().ok();
-
-
-                    // clear colors
-                    port.data_upper.r.set_low().ok();
-                    port.data_lower.r.set_low().ok();
-                    port.data_upper.g.set_low().ok();
-                    port.data_lower.g.set_low().ok();
-
-                    for _ in 0 .. 3 { // three clock cycles empty
-                        port.clock.set_high().ok();
-                        port.clock.set_low().ok();
-                    }
-                }
-                */
             }
-
-
-
-
-
-
             if (row == 0) {
-                port.row_selection.c.set_high().ok();
+                port.next_page();
             } else {
-                port.row_selection.c.set_low().ok();
+                port.next_line();
             }
-            port.output_enabled.set_high().ok();
-
-            port.latch.set_high().ok();
-            port.row_selection.a.set_high().ok();
-            port.latch.set_low().ok();
-            port.row_selection.a.set_low().ok();
-
-            port.output_enabled.set_low().ok();
         }
     }
 }

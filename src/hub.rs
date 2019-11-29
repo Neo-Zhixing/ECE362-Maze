@@ -53,24 +53,61 @@ impl<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2> HUBPort<CLK, OEN, LT, A, B, 
           B2: OutputPin,
           G2: OutputPin,
  {
-    pub(crate) fn select_row(&mut self, row: u8) {
-        if row & 0b00001 != 0 {
-            self.row_selection.a.set_high().ok();
-        } else {
-            self.row_selection.a.set_low().ok();
-        }
+    pub(crate) fn next_line(&mut self) {
+        self.row_selection.c.set_low().ok();
+        self.output_enabled.set_high().ok();
+        self.latch.set_high().ok();
+        self.latch.set_low().ok();
 
-        if row & 0b00010 != 0 {
-            self.row_selection.b.set_high().ok();
-        } else {
-            self.row_selection.b.set_low().ok();
-        }
-
-        if row & 0b00100 != 0 {
-            self.row_selection.c.set_high().ok();
-        } else {
-            self.row_selection.c.set_low().ok();
-        }
+        self.row_selection.a.set_high().ok();
+        self.row_selection.a.set_low().ok();
+        self.output_enabled.set_low().ok();
     }
+     pub(crate) fn next_page(&mut self) {
+         self.row_selection.c.set_high().ok();
+         self.output_enabled.set_high().ok();
+         self.latch.set_high().ok();
+         self.latch.set_low().ok();
+
+         self.row_selection.a.set_high().ok();
+         self.row_selection.a.set_low().ok();
+         self.output_enabled.set_low().ok();
+     }
+     pub(crate) fn next_pixel(&mut self, pixel: u16) {
+         self.clock.set_high().ok();
+
+         if ((pixel >> 5) & 0b001) == 1 {
+             self.data_upper.r.set_high().ok();
+         } else {
+             self.data_upper.r.set_low().ok();
+         }
+         if ((pixel >> 4) & 0b001) == 1 {
+             self.data_upper.g.set_high().ok();
+         } else {
+             self.data_upper.g.set_low().ok();
+         }
+         if ((pixel >> 3) & 0b001) == 1 {
+             self.data_upper.b.set_high().ok();
+         } else {
+             self.data_upper.b.set_low().ok();
+         }
+         if ((pixel >> 2) & 0b001) == 1 {
+             self.data_lower.r.set_high().ok();
+         } else {
+             self.data_lower.r.set_low().ok();
+         }
+         if ((pixel >> 1) & 0b001) == 1 {
+             self.data_lower.g.set_high().ok();
+         } else {
+             self.data_lower.g.set_low().ok();
+         }
+         if ((pixel >> 0) & 0b001) == 1 {
+             self.data_lower.b.set_high().ok();
+         } else {
+             self.data_lower.b.set_low().ok();
+         }
+         self.clock.set_low().ok();
+     }
 }
+
 
