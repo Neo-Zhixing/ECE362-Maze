@@ -174,17 +174,13 @@ impl MazeGenerator {
 		}
 	}
 
-	pub fn generate(&mut self) -> Maze {
-		let mut maze = Maze::new();
-		self.generate_at_point(&mut maze, self.start);
-		maze
+	pub fn generate(&mut self, maze: &mut Maze) {
+		self.generate_at_point(maze, self.start);
 	}
 
 
-	pub fn dummy_generate(&mut self) -> Maze {
-		let mut maze = Maze::new();
+	pub fn dummy_generate(&mut self, maze: &mut Maze) {
 		maze.bitmap_left.set(Point { x: 10, y: 0}, false);
-		maze
 	}
 
 	pub fn generate_at_point(&mut self, maze: &mut Maze, location: Point) {

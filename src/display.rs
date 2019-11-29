@@ -1,13 +1,3 @@
-use crate::{
-    MAZE, HUB_PORT,
-    hal::{
-        stm32,
-        stm32::{
-            interrupt
-        }
-    }
-};
-use core::ops::DerefMut;
 use embedded_hal::digital::v2::{ToggleableOutputPin, OutputPin};
 use crate::hub::HUBPort;
 use crate::maze::{Point, Maze};
@@ -15,33 +5,7 @@ use cortex_m::interrupt::Mutex;
 use core::cell::RefCell;
 
 
-static CURRENT_ROW: Mutex<RefCell<u8>> = Mutex::new(RefCell::new(0));
-
-
-#[interrupt]
-fn TIM6_DAC() {
-    cortex_m::interrupt::free(|cs| {
-        if let (
-            &mut Some(ref mut maze),
-            &mut Some(ref mut port),
-        ) = (
-            MAZE.borrow(cs).borrow_mut().deref_mut(),
-            HUB_PORT.borrow(cs).borrow_mut().deref_mut(),
-        ) {
-            let mut current_row = CURRENT_ROW.borrow(cs).borrow_mut();
-            if *current_row == 32 {
-                *current_row = 0;
-            }
-            draw_row(port, maze, *current_row);
-            *current_row += 1;
-        }
-        unsafe {
-            stm32::Peripherals::steal().TIM6.sr.write(|w| w.uif().clear_bit());
-        }
-    });
-}
-
-fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
+pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     port: &mut HUBPort<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>,
     maze: &Maze,
     row: u8
