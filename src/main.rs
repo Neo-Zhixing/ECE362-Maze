@@ -3,7 +3,7 @@
 
 mod maze;
 mod hub;
-
+mod display;
 
 use panic_halt as _;
 
@@ -27,7 +27,6 @@ use stm32f0::stm32f0x1::Interrupt;
 
 // Mutex is a data structure when you're trying to access it, it disable interrupts for safety
 static MAZE: Mutex<RefCell<Option<maze::Maze>>> = Mutex::new(RefCell::new(None));
-static LED: Mutex<RefCell<Option<gpioc::PC8<Output<PushPull>>>>> = Mutex::new(RefCell::new(None));
 static HUB_PORT: Mutex<RefCell<Option<hub::HUBPort<
     gpiob::PB1<Output<PushPull>>,
     gpiob::PB0<Output<PushPull>>,
@@ -42,73 +41,6 @@ static HUB_PORT: Mutex<RefCell<Option<hub::HUBPort<
     gpioc::PC4<Output<PushPull>>,
     gpioc::PC5<Output<PushPull>>>>>> = Mutex::new(RefCell::new(None));
 
-#[interrupt]
-fn TIM6_DAC() {
-    cortex_m::interrupt::free(|cs| {
-        if let (
-            &mut Some(ref mut maze),
-            &mut Some(ref mut port),
-            &mut Some(ref mut led),
-        ) = (
-            MAZE.borrow(cs).borrow_mut().deref_mut(),
-            HUB_PORT.borrow(cs).borrow_mut().deref_mut(),
-            LED.borrow(cs).borrow_mut().deref_mut(),
-        ) {
-            led.toggle().ok();
-            for row in 0..32 {
-                if row % 4 == 0 { // top walls
-                    for col in 0..32 {
-                        let mut data: u16 = 0;
-                        if maze.bitmap_top.get(Point{ x: col, y: row/4 }) {
-                            data |= 0b100000;
-                        }
-                        if maze.bitmap_top.get(Point{ x: col, y: (row/4) + 8}) {
-                            data |= 0b000100;
-                        }
-                        for col in 0 .. 4 {
-                            port.next_pixel(data);
-                        }
-                    }
-                    /*
-                    for value in maze.bitmap_top.row_iter(row) {
-                        for i in 0 .. 4 {
-                            port.clock.set_high().ok();
-                            port.data_upper.r.set_low().ok();
-                            port.data_lower.r.set_high().ok();
-                            port.data_upper.g.set_low().ok();
-                            port.data_lower.g.set_low().ok();
-                            port.clock.set_low().ok();
-                        }
-                    }
-                    */
-                } else { // side walls
-                    for col in 0 .. 32 {
-                        let mut data: u16 = 0;
-                        if maze.bitmap_left.get(Point{ x: col, y: row/4 }) {
-                            data |= 0b100000;
-                        }
-                        if maze.bitmap_left.get(Point{ x: col, y: (row/4) + 8}) {
-                            data |= 0b000100;
-                        }
-                        port.next_pixel(data);
-
-                        for _ in 0 .. 3 {
-                            port.next_pixel(0);
-                        }
-                    }
-                }
-                if row == 0 {
-                    port.next_page();
-                } else {
-                    port.next_line();
-                }
-            }
-        }
-        unsafe {
-            stm32::Peripherals::steal().TIM6.sr.write(|w| w.uif().clear_bit());
-        }
-    });
-}
 
 #[entry]
 fn main() -> ! {
@@ -164,10 +96,10 @@ fn main() -> ! {
     cortex_m::interrupt::free(|cs| {
         *MAZE.borrow(cs).borrow_mut() = Some(maze);
         *HUB_PORT.borrow(cs).borrow_mut() = Some(port);
-        *LED.borrow(cs).borrow_mut() = Some(led_blue);
     });
 
-    let mut timer = hal::timers::Timer::tim6(peripherals.TIM6, hal::time::Hertz(100), &mut rcc);
+    // Setting up timer for display refresh
+    let mut timer = hal::timers::Timer::tim6(peripherals.TIM6, hal::time::Hertz(120 * 32), &mut rcc);
     timer.listen(hal::timers::Event::TimeOut);
     let mut nvic = kernel_peripherals.NVIC;
     unsafe {
