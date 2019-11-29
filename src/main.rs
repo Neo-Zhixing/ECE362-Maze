@@ -8,7 +8,7 @@ mod hub;
 use panic_halt as _;
 
 use stm32f0xx_hal as hal;
-use crate::hal::{prelude::*, stm32, serial, delay::Delay, i2c, prelude::*,};
+use crate::hal::{prelude::*, stm32, serial, delay::Delay, i2c, gpio::*, stm32::{interrupt}};
 
 //use crate::maze::{Maze, MazeGenerator};
 use cortex_m_rt::entry;
@@ -20,7 +20,95 @@ use ssd1306::prelude::*;
 use ssd1306::Builder;
 use crate::hal::dac::*;
 use crate::maze::Point;
+use cortex_m::interrupt::Mutex;
+use core::cell::RefCell;
+use core::ops::DerefMut;
+use stm32f0::stm32f0x1::Interrupt;
 
+// Mutex is a data structure when you're trying to access it, it disable interrupts for safety
+static MAZE: Mutex<RefCell<Option<maze::Maze>>> = Mutex::new(RefCell::new(None));
+static LED: Mutex<RefCell<Option<gpioc::PC8<Output<PushPull>>>>> = Mutex::new(RefCell::new(None));
+static HUB_PORT: Mutex<RefCell<Option<hub::HUBPort<
+    gpiob::PB1<Output<PushPull>>,
+    gpiob::PB0<Output<PushPull>>,
+    gpiob::PB2<Output<PushPull>>,
+    gpiob::PB3<Output<PushPull>>,
+    gpiob::PB4<Output<PushPull>>,
+    gpiob::PB5<Output<PushPull>>,
+    gpioc::PC0<Output<PushPull>>,
+    gpioc::PC1<Output<PushPull>>,
+    gpioc::PC2<Output<PushPull>>,
+    gpioc::PC3<Output<PushPull>>,
+    gpioc::PC4<Output<PushPull>>,
+    gpioc::PC5<Output<PushPull>>>>>> = Mutex::new(RefCell::new(None));
+
+#[interrupt]
+fn TIM6_DAC() {
+    cortex_m::interrupt::free(|cs| {
+        if let (
+            &mut Some(ref mut maze),
+            &mut Some(ref mut port),
+            &mut Some(ref mut led),
+        ) = (
+            MAZE.borrow(cs).borrow_mut().deref_mut(),
+            HUB_PORT.borrow(cs).borrow_mut().deref_mut(),
+            LED.borrow(cs).borrow_mut().deref_mut(),
+        ) {
+            led.toggle().ok();
+            for row in 0..32 {
+                if row % 4 == 0 { // top walls
+                    for col in 0..32 {
+                        let mut data: u16 = 0;
+                        if maze.bitmap_top.get(Point{ x: col, y: row/4 }) {
+                            data |= 0b100000;
+                        }
+                        if maze.bitmap_top.get(Point{ x: col, y: (row/4) + 8}) {
+                            data |= 0b000100;
+                        }
+                        for col in 0 .. 4 {
+                            port.next_pixel(data);
+                        }
+                    }
+                    /*
+                    for value in maze.bitmap_top.row_iter(row) {
+                        for i in 0 .. 4 {
+                            port.clock.set_high().ok();
+                            port.data_upper.r.set_low().ok();
+                            port.data_lower.r.set_high().ok();
+                            port.data_upper.g.set_low().ok();
+                            port.data_lower.g.set_low().ok();
+                            port.clock.set_low().ok();
+                        }
+                    }
+                    */
+                } else { // side walls
+                    for col in 0 .. 32 {
+                        let mut data: u16 = 0;
+                        if maze.bitmap_left.get(Point{ x: col, y: row/4 }) {
+                            data |= 0b100000;
+                        }
+                        if maze.bitmap_left.get(Point{ x: col, y: (row/4) + 8}) {
+                            data |= 0b000100;
+                        }
+                        port.next_pixel(data);
+
+                        for _ in 0 .. 3 {
+                            port.next_pixel(0);
+                        }
+                    }
+                }
+                if row == 0 {
+                    port.next_page();
+                } else {
+                    port.next_line();
+                }
+            }
+        }
+        unsafe {
+            stm32::Peripherals::steal().TIM6.sr.write(|w| w.uif().clear_bit());
+        }
+    });
+}
 
 #[entry]
 fn main() -> ! {
@@ -67,59 +155,25 @@ fn main() -> ! {
 
     led_blue.set_high().ok();
     let mut maze_generator = maze::MazeGenerator::new();
-    let maze: maze::Maze = maze_generator.dummy_generate();
+    let maze = maze_generator.dummy_generate();
+
     led_blue.set_low().ok();
     // keep row selection port enabled
     port.row_selection.b.set_low().ok();
-    loop {
-        for row in 0..32 {
-            if row % 4 == 0 { // top walls
-                for col in 0..32 {
-                    let mut data: u16 = 0;
-                    if maze.bitmap_top.get(Point{ x: col, y: row/4 }) {
-                        data |= 0b100000;
-                    }
-                    if maze.bitmap_top.get(Point{ x: col, y: (row/4) + 8}) {
-                        data |= 0b000100;
-                    }
-                    for col in 0 .. 4 {
-                        port.next_pixel(data);
-                    }
-                }
-                /*
-                for value in maze.bitmap_top.row_iter(row) {
-                    for i in 0 .. 4 {
-                        port.clock.set_high().ok();
-                        port.data_upper.r.set_low().ok();
-                        port.data_lower.r.set_high().ok();
-                        port.data_upper.g.set_low().ok();
-                        port.data_lower.g.set_low().ok();
-                        port.clock.set_low().ok();
-                    }
-                }
-                */
-            } else { // side walls
-                for col in 0 .. 32 {
-                    let mut data: u16 = 0;
-                    if maze.bitmap_left.get(Point{ x: col, y: row/4 }) {
-                        data |= 0b100000;
-                    }
-                    if maze.bitmap_left.get(Point{ x: col, y: (row/4) + 8}) {
-                        data |= 0b000100;
-                    }
-                    port.next_pixel(data);
 
-                    for _ in 0 .. 3 {
-                        port.next_pixel(0);
-                    }
-                }
-            }
-            if (row == 0) {
-                port.next_page();
-            } else {
-                port.next_line();
-            }
-        }
+    cortex_m::interrupt::free(|cs| {
+        *MAZE.borrow(cs).borrow_mut() = Some(maze);
+        *HUB_PORT.borrow(cs).borrow_mut() = Some(port);
+        *LED.borrow(cs).borrow_mut() = Some(led_blue);
+    });
+
+    let mut timer = hal::timers::Timer::tim6(peripherals.TIM6, hal::time::Hertz(100), &mut rcc);
+    timer.listen(hal::timers::Event::TimeOut);
+    let mut nvic = kernel_peripherals.NVIC;
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(Interrupt::TIM6_DAC);
+    }
+    loop {
     }
 }
 
