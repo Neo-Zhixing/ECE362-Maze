@@ -82,8 +82,18 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
             }
             port.next_pixel(data);
 
+            data = 0;
+            if maze.start.x == col && maze.start.y == maze_row {
+                data |= 0b001000;
+            } else if maze.start.x == col && maze.start.y == maze_row + 8 {
+                data |= 0b000001;
+            } else if maze.end.x == col && maze.end.y == maze_row {
+                data |= 0b010000;
+            } else if maze.end.x == col && maze.end.y == maze_row + 8 {
+                data |= 0b000010;
+            }
             for i in 1 .. 4 {
-                port.next_pixel(0);
+                port.next_pixel(data);
             }
         }
     }

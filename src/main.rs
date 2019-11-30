@@ -167,7 +167,7 @@ const APP: () = {
         port.row_selection.b.set_low().ok();
 
         // Setting up timer for display refresh
-        let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32 * 256), &mut rcc);
+        let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32), &mut rcc);
         timer.listen(hal::timers::Event::TimeOut);
 
         let mut timer_input = hal::timers::Timer::tim14(_device.TIM14, hal::time::Hertz(100), &mut rcc);

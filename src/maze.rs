@@ -204,6 +204,8 @@ impl MazeGenerator {
 		let y: u8 = self.rng.gen();
 		maze.start = Point { x: x >> 3, y: y >> 4 };
 		let mut current = maze.start;
+		let mut length: u16 = 0;
+		let mut maxlength: u16 = 0;
 		loop {
 			let current_state: &mut u8 = &mut self.state[current.y as usize][current.x as usize];
 			let incoming_edges = *current_state >> 4; // first four bits
@@ -243,6 +245,7 @@ impl MazeGenerator {
 					return;
 				}
 				current = current.dir(MazeGenerator::bin_to_dir(incoming_edges));
+				length -= 1;
 				continue;
 			}
 
@@ -259,9 +262,19 @@ impl MazeGenerator {
 
 			*current_state |= dir_to_go;
 			current = current.dir(direction);
+			length += 1; // going forward
+
+			if length > maxlength {
+				maxlength = length;
+				maze.end = current;
+			}
 
 			let opposite_dir = MazeGenerator::bin_dir_opposite(dir_to_go);
 			self.state[current.y as usize][current.x as usize] |= opposite_dir << 4; // set the incoming edges
+
+			for _ in 0 .. 10000 {
+				nop();
+			}
 		}
 	}
 }
