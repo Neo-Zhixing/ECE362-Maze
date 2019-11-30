@@ -3,11 +3,13 @@ use crate::hub::HUBPort;
 use crate::maze::{Point, Maze};
 use cortex_m::interrupt::Mutex;
 use core::cell::RefCell;
+use crate::ball::Ball;
 
 
 pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     port: &mut HUBPort<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>,
     maze: &Maze,
+    ball: &Ball,
     row: u8
 ) where CLK: OutputPin,
         OEN: OutputPin,
@@ -69,6 +71,7 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
         }
     } else { // side walls
         for col in 0 .. 32 {
+            // Render the wall
             let mut data: u16 = 0;
             if maze.bitmap_left.get(Point{ x: col, y: maze_row }) {
                 data |= 0b100000;
@@ -78,8 +81,23 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
             }
             port.next_pixel(data);
 
-            for _ in 0 .. 3 {
-                port.next_pixel(0);
+
+            for i in 1 .. 4 {
+                let mut data: u16 = 0;
+
+                for offset in 0 .. 2 {
+                    let screen_x = col * 4 + i;
+                    let screen_y = row + offset * 32;
+                    if (ball.x / 128 < screen_x as u16) && (ball.y / 128 < screen_y as u16) {
+                        // spot on
+                        if offset == 0 {
+                            data |= 0b010000;
+                        } else {
+                            data |= 0b000010;
+                        }
+                    }
+                }
+                port.next_pixel(data);
             }
         }
     }

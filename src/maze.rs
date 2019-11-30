@@ -155,7 +155,7 @@ impl Maze {
 
 
 pub struct MazeGenerator {
-	start: Point,
+	pub(crate) start: Point,
 	end: Point,
 	state: [[u8; (WIDTH) as usize]; HEIGHT as usize],
 	visited: BitMap,
@@ -163,12 +163,12 @@ pub struct MazeGenerator {
 }
 impl MazeGenerator {
 	pub fn new() -> MazeGenerator {
-		let seed: [u8; 16] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+		let seed: [u8; 16] = [0,12,0,25,0,0,0,0,0,0,0,1,0,0,0,15];
 		let mut rng = rand::rngs::SmallRng::from_seed(seed);
 		let x: u8 = rng.gen();
 		let y: u8 = rng.gen();
 		MazeGenerator {
-			start: Point { x: x >> 5, y: y >> 5 },
+			start: Point { x: x >> 3, y: y >> 4 },
 			end: Point{ x: 0, y: 0 },
 			state: [[0; WIDTH as usize]; HEIGHT as usize],
 			visited: BitMap::new(false),
