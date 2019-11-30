@@ -3,7 +3,6 @@ const HEIGHT: u8 = 16;
 
 extern crate rand;
 use rand::{Rng, SeedableRng};
-use cortex_m::asm::nop;
 
 #[derive(Copy, Clone)]
 pub struct Point {
@@ -271,10 +270,6 @@ impl MazeGenerator {
 
 			let opposite_dir = MazeGenerator::bin_dir_opposite(dir_to_go);
 			self.state[current.y as usize][current.x as usize] |= opposite_dir << 4; // set the incoming edges
-
-			for _ in 0 .. 10000 {
-				nop();
-			}
 		}
 	}
 }

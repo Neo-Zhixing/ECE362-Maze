@@ -12,7 +12,6 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     maze: &Maze,
     ball: &Ball,
     row: u8,
-    pwm_counter: u8,
 ) where CLK: OutputPin,
         OEN: OutputPin,
         LT: OutputPin,
@@ -102,4 +101,26 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     } else {
         port.next_line();
     }
+}
+
+
+pub(crate) fn draw_ball<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
+    port: &mut HUBPort<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>,
+    ball: &Ball,
+    row: u8,
+    pwm_counter: u8,
+) where CLK: OutputPin,
+        OEN: OutputPin,
+        LT: OutputPin,
+        A: OutputPin,
+        B: OutputPin,
+        C: OutputPin,
+        R1: OutputPin,
+        G1: OutputPin,
+        B1: OutputPin,
+        R2: OutputPin,
+        B2: OutputPin,
+        G2: OutputPin,
+{
+
 }

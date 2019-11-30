@@ -43,9 +43,6 @@ const APP: () = {
         #[init(0)]
         current_row: u8,
 
-        #[init(0)]
-        display_pwm_counter: u8,
-
         hub_port: hub::HUBPort<
             gpiob::PB1<Output<PushPull>>,
             gpiob::PB0<Output<PushPull>>,
@@ -167,6 +164,9 @@ const APP: () = {
         port.row_selection.b.set_low().ok();
 
         // Setting up timer for display refresh
+        // Why 60 * 32? 120 Hertz is the refresh rate for high end screens, and we have 32 rows
+        // This value needs to be as low as possible, otherwise CPU utilization rate would be too high
+        // For us to do anything else useful.
         let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32), &mut rcc);
         timer.listen(hal::timers::Event::TimeOut);
 
@@ -200,20 +200,15 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM6_DAC, resources=[current_row, &maze, &ball, hub_port, display_pwm_counter], priority=10)]
+    #[task(binds = TIM6_DAC, resources=[current_row, &maze, &ball, hub_port], priority=10)]
     fn tick (ctx: tick::Context) {
         let current_row: &mut u8 = ctx.resources.current_row;
         let maze: &maze::Maze = ctx.resources.maze;
         let port = ctx.resources.hub_port;
-        let pwm = ctx.resources.display_pwm_counter;
         if *current_row == 32 {
             *current_row = 0;
-            *pwm += 1;
-            if *pwm >= display::PWMFrequency {
-                *pwm = 0;
-            }
         }
-        display::draw_row(port, maze, ctx.resources.ball, *current_row, *pwm);
+        display::draw_row(port, maze, ctx.resources.ball, *current_row);
         *current_row += 1;
 
         unsafe {
@@ -221,7 +216,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM14, resources=[&ball, hub_port, adc, joystick, serial], priority=5)]
+    #[task(binds = TIM14, resources=[&ball, hub_port, adc, joystick], priority=5)]
     fn input (ctx: input::Context) {
         let valx: u16 = ctx.resources.adc.read(&mut ctx.resources.joystick.axis_x).unwrap();
         let valy: u16 = ctx.resources.adc.read(&mut ctx.resources.joystick.axis_y).unwrap();
@@ -249,8 +244,6 @@ const APP: () = {
             }
             ball.x = newx as u16;
             ball.y = newy as u16;
-            //ball.x += valx as u16;
-            //ball.y += valy as u16;;
         }
         unsafe {
             stm32::Peripherals::steal().TIM14.sr.write(|w| w.uif().clear_bit());
