@@ -11,7 +11,7 @@ pub struct Point {
 	pub y: u8,
 }
 impl Point {
-	fn dir(&self, direction: Direction) -> Option<Point>{
+	fn dir(&self, direction: Direction) -> Point {
 		match direction {
 			Direction::Right => self.right(),
 			Direction::Left => self.left(),
@@ -19,17 +19,17 @@ impl Point {
 			Direction::Bottom => self.bottom(),
 		}
 	}
-	fn right(&self) -> Option<Point> {
-		if self.x+1 == WIDTH {None} else {Some(Point{ x: self.x+1, y: self.y })}
+	fn right(&self) -> Point {
+		Point{ x: self.x+1, y: self.y }
 	}
-	fn left(&self) -> Option<Point> {
-		if self.x == 0 {None} else {Some(Point{ x: self.x-1, y: self.y })}
+	fn left(&self) -> Point {
+		Point{ x: self.x-1, y: self.y }
 	}
-	fn top(&self) -> Option<Point> {
-		if self.y == 0 {None} else {Some(Point{ x: self.x, y: self.y-1 })}
+	fn top(&self) -> Point {
+		Point{ x: self.x, y: self.y-1 }
 	}
-	fn bottom(&self) -> Option<Point> {
-		if self.y+1 == HEIGHT {None} else {Some(Point{ x: self.x, y: self.y+1 })}
+	fn bottom(&self) -> Point {
+		Point{ x: self.x, y: self.y+1 }
 	}
 }
 
@@ -140,8 +140,8 @@ impl Maze {
 		match dir {
 			Direction::Top => self.bitmap_top.set(location, false),
 			Direction::Left => self.bitmap_left.set(location, false),
-			Direction::Bottom => if let Some(point) = location.bottom() { self.bitmap_top.set(point, false)},
-			Direction::Right => if let Some(point) = location.right() {self.bitmap_left.set(point, false)}
+			Direction::Bottom => self.bitmap_top.set(location.bottom(), false),
+			Direction::Right => self.bitmap_left.set(location.right(), false)
 		}
 	}
 	pub fn grid_iter<'a>(&'a self) -> impl Iterator<Item = impl Iterator<Item = (bool, bool)> + 'a> + 'a {
@@ -157,56 +157,109 @@ impl Maze {
 pub struct MazeGenerator {
 	start: Point,
 	end: Point,
+	state: [[u8; (WIDTH) as usize]; HEIGHT as usize],
 	visited: BitMap,
 	rng: rand::rngs::SmallRng
 }
 impl MazeGenerator {
 	pub fn new() -> MazeGenerator {
-		let seed: [u8; 16] = [0; 16];
+		let seed: [u8; 16] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 		let mut rng = rand::rngs::SmallRng::from_seed(seed);
 		let x: u8 = rng.gen();
 		let y: u8 = rng.gen();
 		MazeGenerator {
 			start: Point { x: x >> 5, y: y >> 5 },
 			end: Point{ x: 0, y: 0 },
+			state: [[0; WIDTH as usize]; HEIGHT as usize],
 			visited: BitMap::new(false),
 			rng
 		}
 	}
 
+	// Maze gen algorithm
+	// States: for each cell, there're 8 bits available.
+	// First four bits: incoming edge direction. Up, Down, Left, Right. 0b0000 means this is starting cell
+	// Last four bits: outgoing edge direction. Same definition.
+
+	// When no more ways to go, backtrack by going to the grid incoming edge is pointing to.
+	fn bin_to_dir(bindir: u8) -> Direction {
+		match bindir {
+			0b1000 => Direction::Top,
+			0b0100 => Direction::Bottom,
+			0b0010 => Direction::Left,
+			0b0001 | _ => Direction::Right,
+		}
+	}
+
+	fn bin_dir_opposite(bindir: u8) -> u8 {
+		if bindir & 0b1010 == 0 {
+			// up or left
+			bindir << 1
+		} else {
+			bindir >> 1
+		}
+	}
+
 	pub fn generate(&mut self, maze: &mut Maze) {
-		self.generate_at_point(maze, self.start);
-	}
+		let mut current = self.start;
+		loop {
+			let current_state: &mut u8 = &mut self.state[current.y as usize][current.x as usize];
+			let incoming_edges = *current_state >> 4; // first four bits
+			let outgoing_edges = *current_state & 0b1111; // last four bits
 
+			let mut available_edges_to_go = !(incoming_edges | outgoing_edges) & 0b1111;
 
-	pub fn dummy_generate(&mut self, maze: &mut Maze) {
-		maze.bitmap_left.set(Point { x: 10, y: 0}, false);
-	}
+			if current.x == 0 {
+				available_edges_to_go &= !0b0010; // dont go left
+			} else if current.x == WIDTH-1 {
+				available_edges_to_go &= !0b0001; // dont go right
+			}
+			if current.y == 0 {
+				available_edges_to_go &= !0b1000; // dont go up
+			} else if current.y == HEIGHT - 1 {
+				available_edges_to_go &= !0b0100; // dont go down
+			}
 
-	pub fn generate_at_point(&mut self, maze: &mut Maze, location: Point) {
-		self.visited.set(location, true);
-		let mut tried_dirs: u8 = 0;
-		while tried_dirs != 0b1111 {
-			let mut rand_num: u8 = self.rng.gen();
-			rand_num = rand_num >> 6;
-			let rand_dir = match rand_num{
-				0 => Direction::Right,
-				1 => Direction::Left,
-				2 => Direction::Top,
-				_ => Direction::Bottom
-			};
-			tried_dirs |= 1 << rand_num;
-			if let Some(new_location) = location.dir(rand_dir) {
-				if !self.visited.get(new_location) {
-					maze.break_wall(location, rand_dir);
-					for i in 1 .. 100000 {
-						nop();
-						nop();
-						nop();
-					}
-					self.generate_at_point(maze, new_location);
+			for i in 0 .. 4 {
+				let dir: u8 = 1 << i;
+				if available_edges_to_go & dir == 0 {
+					// This direction was already blocked
+					continue;
+				}
+				let point = current.dir(MazeGenerator::bin_to_dir(dir));
+				if self.visited.get(point) {
+					// The block on this direction was already visited. Skip it.
+					available_edges_to_go &= !dir;
 				}
 			}
+
+			if available_edges_to_go == 0 {
+				// backtrace
+				self.visited.set(current, true);
+				if incoming_edges == 0 {
+					// incoming edges equals 0, meaning this is the starting location
+					return;
+				}
+				current = current.dir(MazeGenerator::bin_to_dir(incoming_edges));
+				continue;
+			}
+
+			// determine the direction to go
+			let mut dir_to_go: u8 = 0;
+			while dir_to_go == 0 {
+				let rand_num: u8 = self.rng.gen();
+				let rand_num: u8 = 1_u8 << (rand_num & 0b11_u8);
+				dir_to_go = available_edges_to_go & rand_num;
+			}
+			let direction = MazeGenerator::bin_to_dir(dir_to_go);
+			maze.break_wall(current, direction);
+			self.visited.set(current, true);
+
+			*current_state |= dir_to_go;
+			current = current.dir(direction);
+
+			let opposite_dir = MazeGenerator::bin_dir_opposite(dir_to_go);
+			self.state[current.y as usize][current.x as usize] |= opposite_dir << 4; // set the incoming edges
 		}
 	}
 }
