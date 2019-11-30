@@ -128,12 +128,16 @@ pub enum Direction {
 pub struct Maze {
 	pub bitmap_left: BitMap,
 	pub bitmap_top: BitMap,
+	pub start: Point,
+	pub end: Point,
 }
 impl Maze {
 	pub fn new() -> Maze {
 		Maze {
 			bitmap_top: BitMap::new(true),
 			bitmap_left: BitMap::new(true),
+			start: Point { x: 0, y: 0 },
+			end: Point { x: 0, y: 0 },
 		}
 	}
 	pub fn break_wall(&mut self, location: Point, dir: Direction) {
@@ -155,8 +159,6 @@ impl Maze {
 
 
 pub struct MazeGenerator {
-	pub(crate) start: Point,
-	end: Point,
 	state: [[u8; (WIDTH) as usize]; HEIGHT as usize],
 	visited: BitMap,
 	rng: rand::rngs::SmallRng
@@ -165,11 +167,8 @@ impl MazeGenerator {
 	pub fn new() -> MazeGenerator {
 		let seed: [u8; 16] = [0,12,0,25,0,0,0,0,0,0,0,1,0,0,0,15];
 		let mut rng = rand::rngs::SmallRng::from_seed(seed);
-		let x: u8 = rng.gen();
-		let y: u8 = rng.gen();
+
 		MazeGenerator {
-			start: Point { x: x >> 3, y: y >> 4 },
-			end: Point{ x: 0, y: 0 },
 			state: [[0; WIDTH as usize]; HEIGHT as usize],
 			visited: BitMap::new(false),
 			rng
@@ -201,7 +200,10 @@ impl MazeGenerator {
 	}
 
 	pub fn generate(&mut self, maze: &mut Maze) {
-		let mut current = self.start;
+		let x: u8 = self.rng.gen();
+		let y: u8 = self.rng.gen();
+		maze.start = Point { x: x >> 3, y: y >> 4 };
+		let mut current = maze.start;
 		loop {
 			let current_state: &mut u8 = &mut self.state[current.y as usize][current.x as usize];
 			let incoming_edges = *current_state >> 4; // first four bits

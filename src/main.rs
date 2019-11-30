@@ -229,8 +229,8 @@ const APP: () = {
         let mut valx: i16 = ctx.resources.joystick.mid_x as i16 - valx as i16;
         let mut valy: i16 = valy as i16 - ctx.resources.joystick.mid_y as i16;
 
-        valx = if valx > 10 || valx < -10 { valx / 128 } else { 0 };
-        valy = if valy > 10 || valy < -10 { valy / 128 } else { 0 };
+        valx /= 256;
+        valy /= 256;
 
         unsafe {
             let ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
@@ -267,12 +267,12 @@ const APP: () = {
             let ptr = ctx.resources.maze as *const maze::Maze as *mut maze::Maze;
             let maze = &mut *ptr;
 
+            maze_generator.generate(maze);
+
             let ball_ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
             let ball = &mut *ball_ptr;
 
-            *ball = ball::Ball::from_point(&(maze_generator.start));
-
-            maze_generator.generate(maze);
+            *ball = ball::Ball::from_point(&(maze.start));
         }
 
         loop {
