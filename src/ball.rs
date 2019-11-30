@@ -14,8 +14,8 @@ impl Ball {
     }
     pub(crate) fn from_point(p: &Point) -> Ball {
         Ball {
-            x: (p.x as u16) * PWMFrequency as u16 * 4,
-            y: (p.y as u16) * PWMFrequency as u16 * 4,
+            x: (p.x as u16 * 4 + 2) * PWMFrequency as u16,
+            y: (p.y as u16 * 4 + 2) * PWMFrequency as u16,
         }
     }
 }

@@ -26,9 +26,11 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
         G2: OutputPin,
 {
     let maze_row = row / 4;
+    let mut buf = [0_u8; 128];
+    let mut buf_iter = buf.iter_mut();
     if row % 4 == 0 { // top walls
         for col in 0..32 {
-            let mut data: u16 = 0;
+            let mut data: u8 = 0;
             if maze.bitmap_top.get(Point{ x: col, y: maze_row }) {
                 data |= 0b100000;
             }
@@ -62,24 +64,24 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
                         altdata |= 0b000100;
                     }
                 }
-                port.next_pixel(altdata);
+                *buf_iter.next().unwrap() = altdata;
             }
 
             for col in 1 .. 4 {
-                port.next_pixel(data);
+                *buf_iter.next().unwrap() = data;
             }
         }
     } else { // side walls
         for col in 0 .. 32 {
             // Render the wall
-            let mut data: u16 = 0;
+            let mut data: u8 = 0;
             if maze.bitmap_left.get(Point{ x: col, y: maze_row }) {
                 data |= 0b100000;
             }
             if maze.bitmap_left.get(Point{ x: col, y: maze_row + 8}) {
                 data |= 0b000100;
             }
-            port.next_pixel(data);
+            *buf_iter.next().unwrap() = data;
 
             data = 0;
             if maze.start.x == col && maze.start.y == maze_row {
@@ -92,9 +94,26 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
                 data |= 0b000010;
             }
             for i in 1 .. 4 {
-                port.next_pixel(data);
+                *buf_iter.next().unwrap() = data;
             }
         }
+    }
+
+
+
+    let ball_screen_x = (ball.x / PWMFrequency as u16) as u8;
+    let ball_screen_y = (ball.y / PWMFrequency as u16) as u8;
+    for offset in 0 .. 2 {
+        let current_screen_row = row + (32 & (offset << 5));
+        if ball_screen_y == current_screen_row {
+            let shift = offset | (offset << 1); // 3 if offset is 1, or 0 if offset is 0
+            buf[ball_screen_x as usize] |= 0b111000 >> shift;
+        }
+    }
+
+
+    for i in buf.iter().cloned() {
+        port.next_pixel(i);
     }
     if row == 0 {
         port.next_page();
