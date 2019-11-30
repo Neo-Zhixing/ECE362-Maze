@@ -73,6 +73,12 @@ impl<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2> HUBPort<CLK, OEN, LT, A, B, 
          self.row_selection.a.set_low().ok();
          self.output_enabled.set_low().ok();
      }
+     pub(crate) fn flush(&mut self) {
+         self.output_enabled.set_high().ok();
+         self.latch.set_high().ok();
+         self.latch.set_low().ok();
+         self.output_enabled.set_low().ok();
+     }
      pub(crate) fn next_pixel(&mut self, pixel: u16) {
          self.clock.set_high().ok();
 

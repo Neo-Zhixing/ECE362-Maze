@@ -43,6 +43,9 @@ const APP: () = {
         #[init(0)]
         current_row: u8,
 
+        #[init(0)]
+        display_pwm_counter: u8,
+
         hub_port: hub::HUBPort<
             gpiob::PB1<Output<PushPull>>,
             gpiob::PB0<Output<PushPull>>,
@@ -164,7 +167,7 @@ const APP: () = {
         port.row_selection.b.set_low().ok();
 
         // Setting up timer for display refresh
-        let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32), &mut rcc);
+        let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32 * 256), &mut rcc);
         timer.listen(hal::timers::Event::TimeOut);
 
         let mut timer_input = hal::timers::Timer::tim14(_device.TIM14, hal::time::Hertz(100), &mut rcc);
@@ -197,15 +200,20 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM6_DAC, resources=[current_row, &maze, &ball, hub_port], priority=10)]
+    #[task(binds = TIM6_DAC, resources=[current_row, &maze, &ball, hub_port, display_pwm_counter], priority=10)]
     fn tick (ctx: tick::Context) {
         let current_row: &mut u8 = ctx.resources.current_row;
         let maze: &maze::Maze = ctx.resources.maze;
         let port = ctx.resources.hub_port;
+        let pwm = ctx.resources.display_pwm_counter;
         if *current_row == 32 {
             *current_row = 0;
+            *pwm += 1;
+            if *pwm >= display::PWMFrequency {
+                *pwm = 0;
+            }
         }
-        display::draw_row(port, maze, ctx.resources.ball, *current_row);
+        display::draw_row(port, maze, ctx.resources.ball, *current_row, *pwm);
         *current_row += 1;
 
         unsafe {
@@ -221,8 +229,8 @@ const APP: () = {
         let mut valx: i16 = ctx.resources.joystick.mid_x as i16 - valx as i16;
         let mut valy: i16 = valy as i16 - ctx.resources.joystick.mid_y as i16;
 
-        valx = if valx > 10 || valx < -10 { valx / 32 } else { 0 };
-        valy = if valy > 10 || valy < -10 { valy / 32 } else { 0 };
+        valx = if valx > 10 || valx < -10 { valx / 128 } else { 0 };
+        valy = if valy > 10 || valy < -10 { valy / 128 } else { 0 };
 
         unsafe {
             let ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
@@ -231,13 +239,13 @@ const APP: () = {
             let mut newy: i16 = (ball.y as i16 + valy);
             if newx < 0 {
                 newx = 0;
-            } else if newx > 32 * 4 * 128 - 1 {
-                newx = 32 * 4 * 128 - 1;
+            } else if newx > 32 * 4 * display::PWMFrequency as i16 - 1 {
+                newx = 32 * 4 * display::PWMFrequency as i16 - 1;
             }
             if newy < 0 {
                 newy = 0;
-            } else if newy > 16 * 4 * 128 - 1 {
-                newy = 16 * 4 * 128 - 1;
+            } else if newy > 16 * 4 * display::PWMFrequency as i16 - 1 {
+                newy = 16 * 4 * display::PWMFrequency as i16 - 1;
             }
             ball.x = newx as u16;
             ball.y = newy as u16;

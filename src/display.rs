@@ -5,12 +5,14 @@ use cortex_m::interrupt::Mutex;
 use core::cell::RefCell;
 use crate::ball::Ball;
 
+pub(crate) const PWMFrequency: u8 = 8;
 
 pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     port: &mut HUBPort<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>,
     maze: &Maze,
     ball: &Ball,
-    row: u8
+    row: u8,
+    pwm_counter: u8,
 ) where CLK: OutputPin,
         OEN: OutputPin,
         LT: OutputPin,
@@ -24,7 +26,8 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
         B2: OutputPin,
         G2: OutputPin,
 {
-
+    let mut data = [0_u16; 128];
+    let mut data_iter = data.iter_mut();
     let maze_row = row / 4;
     if row % 4 == 0 { // top walls
         for col in 0..32 {
@@ -62,11 +65,11 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
                         altdata |= 0b000100;
                     }
                 }
-                port.next_pixel(altdata);
+                *data_iter.next().unwrap() = altdata;
             }
 
             for col in 1 .. 4 {
-                port.next_pixel(data);
+                *data_iter.next().unwrap() = data;
             }
         }
     } else { // side walls
@@ -79,27 +82,28 @@ pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
             if maze.bitmap_left.get(Point{ x: col, y: maze_row + 8}) {
                 data |= 0b000100;
             }
-            port.next_pixel(data);
+            *data_iter.next().unwrap() = data;
 
 
             for i in 1 .. 4 {
-                let mut data: u16 = 0;
-
-                for offset in 0 .. 2 {
-                    let screen_x = col * 4 + i;
-                    let screen_y = row + offset * 32;
-                    if (ball.x / 128 < screen_x as u16) && (ball.y / 128 < screen_y as u16) {
-                        // spot on
-                        if offset == 0 {
-                            data |= 0b010000;
-                        } else {
-                            data |= 0b000010;
-                        }
-                    }
-                }
-                port.next_pixel(data);
+                *data_iter.next().unwrap() = 0;
             }
         }
+    }
+
+    for offset in 0..2 {
+        let row = row + offset * 32;
+        let dist = ((row as i16) * PWMFrequency as i16 - ball.y as i16).abs();
+
+        if dist < pwm_counter as i16 {
+
+            data[3] |= 0b001000 >> offset*3;
+        }
+
+    }
+
+    for i in data.iter().copied() {
+        port.next_pixel(i);
     }
     if row == 0 {
         port.next_page();

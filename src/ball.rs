@@ -1,5 +1,5 @@
 use crate::maze::Point;
-
+use crate::display::PWMFrequency;
 pub struct Ball {
     pub x: u16,
     pub y: u16,
@@ -14,8 +14,8 @@ impl Ball {
     }
     pub(crate) fn from_point(p: &Point) -> Ball {
         Ball {
-            x: (p.x as u16) * 128 * 4,
-            y: (p.y as u16) * 128 * 4,
+            x: (p.x as u16) * PWMFrequency as u16 * 4,
+            y: (p.y as u16) * PWMFrequency as u16 * 4,
         }
     }
 }
