@@ -10,20 +10,17 @@ use panic_halt as _;
 use stm32f0xx_hal as hal;
 use crate::hal::{prelude::*, stm32, serial, delay::Delay, i2c, gpio::*, stm32::{interrupt}};
 
-//use crate::maze::{Maze, MazeGenerator};
-use cortex_m_rt::entry;
 
-//use crate::hub::{HUBPort, HUBDataPort, HUBRowSelectionPort};
 use embedded_hal::digital::v2::OutputPin;
 use core::fmt::Write;
 use ssd1306::prelude::*;
 use ssd1306::Builder;
 use crate::hal::dac::*;
 use crate::maze::Point;
-use cortex_m::interrupt::Mutex;
 use core::cell::RefCell;
 use core::ops::DerefMut;
 use stm32f0::stm32f0x1::Interrupt;
+use rtfm::Mutex;
 
 #[rtfm::app(device = stm32f0xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -98,7 +95,6 @@ const APP: () = {
         dac.set_value(4095);
 
         led_blue.set_high().ok();
-        let mut maze_generator = maze::MazeGenerator::new();
 
         led_blue.set_low().ok();
         // keep row selection port enabled
@@ -114,17 +110,16 @@ const APP: () = {
         unsafe {
             cortex_m::peripheral::NVIC::unmask(Interrupt::TIM6_DAC);
         }
-
         init::LateResources {
             hub_port: port,
             maze: maze::Maze::new(),
         }
     }
 
-    #[task(binds = TIM6_DAC, resources=[current_row, maze, hub_port])]
+    #[task(binds = TIM6_DAC, resources=[current_row, &maze, hub_port], priority=10)]
     fn tim6 (ctx: tim6::Context) {
         let current_row: &mut u8 = ctx.resources.current_row;
-        let maze: &mut maze::Maze = ctx.resources.maze;
+        let maze: &maze::Maze = ctx.resources.maze;
         let port = ctx.resources.hub_port;
         if *current_row == 32 {
             *current_row = 0;
@@ -134,6 +129,29 @@ const APP: () = {
         unsafe {
             stm32::Peripherals::steal().TIM6.sr.write(|w| w.uif().clear_bit());
         }
+    }
+
+    #[idle(resources = [&maze])]
+    fn idle (ctx: idle::Context) -> ! {
+        let mut maze_generator = maze::MazeGenerator::new();
+
+        // unsafe is ok here, idle is the only task requiring mutable access to maze.
+        // Needed because 0.5.1 version of cortex-m-rtfm does not support mixed resources access
+        unsafe {
+            let ptr = ctx.resources.maze as *const maze::Maze as *mut maze::Maze;
+            let maze = &mut *ptr;
+            maze_generator.generate(maze);
+        }
+
+
+
+        loop {
+        }
+    }
+
+    // Interrupt handlers used to dispatch software tasks
+    extern "C" {
+        fn USART1();
     }
 };
 

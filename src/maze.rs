@@ -3,6 +3,7 @@ const HEIGHT: u8 = 16;
 
 extern crate rand;
 use rand::{Rng, SeedableRng};
+use cortex_m::asm::nop;
 
 #[derive(Copy, Clone)]
 pub struct Point {
@@ -157,20 +158,19 @@ pub struct MazeGenerator {
 	start: Point,
 	end: Point,
 	visited: BitMap,
+	rng: rand::rngs::SmallRng
 }
 impl MazeGenerator {
-	pub fn random() -> u8 {
+	pub fn new() -> MazeGenerator {
 		let seed: [u8; 16] = [0; 16];
 		let mut rng = rand::rngs::SmallRng::from_seed(seed);
-		rng.gen()
-	}
-	pub fn new() -> MazeGenerator {
-		let x: u8 = MazeGenerator::random();
-		let y: u8 = MazeGenerator::random();
+		let x: u8 = rng.gen();
+		let y: u8 = rng.gen();
 		MazeGenerator {
 			start: Point { x: x >> 5, y: y >> 5 },
 			end: Point{ x: 0, y: 0 },
 			visited: BitMap::new(false),
+			rng
 		}
 	}
 
@@ -187,7 +187,7 @@ impl MazeGenerator {
 		self.visited.set(location, true);
 		let mut tried_dirs: u8 = 0;
 		while tried_dirs != 0b1111 {
-			let mut rand_num: u8 = MazeGenerator::random();
+			let mut rand_num: u8 = self.rng.gen();
 			rand_num = rand_num >> 6;
 			let rand_dir = match rand_num{
 				0 => Direction::Right,
@@ -199,6 +199,11 @@ impl MazeGenerator {
 			if let Some(new_location) = location.dir(rand_dir) {
 				if !self.visited.get(new_location) {
 					maze.break_wall(location, rand_dir);
+					for i in 1 .. 100000 {
+						nop();
+						nop();
+						nop();
+					}
 					self.generate_at_point(maze, new_location);
 				}
 			}
