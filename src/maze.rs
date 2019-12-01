@@ -3,6 +3,8 @@ const HEIGHT: u8 = 16;
 
 extern crate rand;
 use rand::{Rng, SeedableRng};
+use crate::cell::Cell;
+use crate::display::PWMFrequency;
 
 #[derive(Copy, Clone)]
 pub struct Point {
@@ -154,6 +156,54 @@ impl Maze {
 	pub fn row_iter(&self) -> impl Iterator<Item = (BitMapRowIterator, BitMapRowIterator)> {
 		self.bitmap_left.iter().zip(self.bitmap_top.iter())
 	}
+	pub fn connected(&self, cell1: &Cell, cell2: &Cell) -> bool {
+		let freq: u16 = PWMFrequency as u16;
+		let point1 = Point{ x: (cell1.position.x as u16 / freq / 4) as u8, y: (cell1.position.y as u16 / freq / 4) as u8 };
+		let point2 = Point{ x: (cell2.position.x as u16 / freq / 4) as u8, y: (cell2.position.y as u16 / freq / 4) as u8 };
+		if (point1.x as i16 - point2.x as i16).abs() > 1 {
+			return false;
+		}
+		if (point1.y as i16 - point2.y as i16).abs() > 1 {
+			return false;
+		}
+
+
+
+		if point1.y > point2.y {
+			// point1 is on the bottom of point2
+			if self.bitmap_top.get(point1) { return false; }
+			if point1.x != point2.x {
+				return false;
+			}
+		} else if point1.y < point2.y {
+			// point1 is on the top of point2
+			if point1.x != point2.x {
+				return false;
+			}
+			if self.bitmap_top.get(point2) {
+				return false;
+			}
+		}
+
+		if point1.x > point2.x {
+			// point1 is on the right of point 2
+			if self.bitmap_left.get(point1) {
+				return false;
+			}
+			if point1.y != point2.y {
+				return false;
+			}
+		} else if point1.x < point2.x {
+			// point1 is on the left of point 2
+			if point1.y != point2.y {
+				return false;
+			}
+			if self.bitmap_left.get(point2) {
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 
@@ -201,7 +251,8 @@ impl MazeGenerator {
 	pub fn generate(&mut self, maze: &mut Maze) {
 		let x: u8 = self.rng.gen();
 		let y: u8 = self.rng.gen();
-		maze.start = Point { x: x >> 3, y: y >> 4 };
+		// maze.start = Point { x: x >> 3, y: y >> 4 };
+		maze.start = Point { x: 0, y: 0 };
 		let mut current = maze.start;
 		let mut length: u16 = 0;
 		let mut maxlength: u16 = 0;

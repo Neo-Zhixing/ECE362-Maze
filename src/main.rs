@@ -6,6 +6,8 @@ mod hub;
 mod display;
 mod ball;
 mod joystick;
+mod cell;
+
 
 use panic_halt as _;
 
@@ -32,6 +34,8 @@ use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, Rectangle, Triangle};
 use joystick::Joystick;
+use crate::display::PWMFrequency;
+use crate::ball::Ball;
 
 #[rtfm::app(device = stm32f0xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -216,35 +220,62 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM14, resources=[&ball, hub_port, adc, joystick], priority=5)]
+    #[task(binds = TIM14, resources=[&ball, hub_port, adc, joystick, &maze, serial], priority=5)]
     fn input (ctx: input::Context) {
         let valx: u16 = ctx.resources.adc.read(&mut ctx.resources.joystick.axis_x).unwrap();
         let valy: u16 = ctx.resources.adc.read(&mut ctx.resources.joystick.axis_y).unwrap();
-
+        let ball = ctx.resources.ball;
         let mut valx: i16 = ctx.resources.joystick.mid_x as i16 - valx as i16;
         let mut valy: i16 = valy as i16 - ctx.resources.joystick.mid_y as i16;
 
         valx /= 256;
         valy /= 256;
 
+        let mut newx: i16 = ball.x as i16 + valx;
+        let mut newy: i16 = ball.y as i16 + valy;
+        if newx < 0 { newx = 0; }
+        if newy < 0 { newy = 0; }
+        if newx >= 128 * PWMFrequency as i16 {
+            newx = 128 * PWMFrequency as i16 - 1;
+        }
+        if newy >= 64 * PWMFrequency as i16 {
+            newy = 64 * PWMFrequency as i16 - 1;
+        }
+
+        // move on the x direction first
+        let mut ball_after_screen_pos: Ball = Ball { x: newx as u16, y: ball.y };
+
+        let mut cell = crate::cell::Cell::of_ball_point(ball);
+        if !cell.contains(&ball_after_screen_pos) {
+            //write!(ctx.resources.serial, " not containing ");
+            // Entered a new cell
+            let new_cell = crate::cell::Cell::of_ball_point(&ball_after_screen_pos);
+             if !ctx.resources.maze.connected(&cell, &new_cell) {
+                cell.bound_x(&mut ball_after_screen_pos);
+            }
+        }
+
+        ball_after_screen_pos.y = newy as u16;
+
+        cell = crate::cell::Cell::of_ball_point(ball);
+        if !cell.contains(&ball_after_screen_pos) {
+            // Entered a new cell
+            let new_cell = crate::cell::Cell::of_ball_point(&ball_after_screen_pos);
+            if !ctx.resources.maze.connected(&cell, &new_cell) {
+                cell.bound_y(&mut ball_after_screen_pos);
+            }
+        }
+
+        //write!(ctx.resources.serial, "             \r");
         unsafe {
             let ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
             let ball = &mut *ptr;
-            let mut newx: i16 =  (ball.x as i16 + valx);
-            let mut newy: i16 = (ball.y as i16 + valy);
-            if newx < 0 {
-                newx = 0;
-            } else if newx > 32 * 4 * display::PWMFrequency as i16 - 1 {
-                newx = 32 * 4 * display::PWMFrequency as i16 - 1;
-            }
-            if newy < 0 {
-                newy = 0;
-            } else if newy > 16 * 4 * display::PWMFrequency as i16 - 1 {
-                newy = 16 * 4 * display::PWMFrequency as i16 - 1;
-            }
-            ball.x = newx as u16;
-            ball.y = newy as u16;
+            *ball = ball_after_screen_pos;
         }
+
+
+
+
         unsafe {
             stm32::Peripherals::steal().TIM14.sr.write(|w| w.uif().clear_bit());
         }
