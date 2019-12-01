@@ -36,6 +36,7 @@ use embedded_graphics::primitives::{Circle, Rectangle, Triangle};
 use joystick::Joystick;
 use crate::display::PWMFrequency;
 use crate::ball::Ball;
+use cortex_m_semihosting::debug::Exception::InternalError;
 
 #[rtfm::app(device = stm32f0xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -77,7 +78,7 @@ const APP: () = {
         joystick: Joystick<
             gpioa::PA1<Analog>,
             gpioa::PA2<Analog>,
-            gpioa::PA3<Input<Floating>>,
+            gpioa::PA3<Input<PullUp>>,
         >,
         adc: hal::adc::Adc,
         dac: hal::dac::C1,
@@ -86,6 +87,7 @@ const APP: () = {
             gpioa::PA9<Alternate<hal::gpio::AF1>>,
             gpioa::PA10<Alternate<hal::gpio::AF1>>,
         >,
+        exti: hal::stm32::EXTI,
     }
 
     #[init]
@@ -95,6 +97,8 @@ const APP: () = {
 
         // Device specific _device
         let mut _device: stm32::Peripherals = ctx.device;
+
+        _device.RCC.apb2enr.modify(|_, w| w.syscfgen().set_bit());
 
         let mut rcc = _device.RCC.configure().sysclk(48.mhz()).freeze(&mut _device.FLASH);
 
@@ -141,7 +145,7 @@ const APP: () = {
              gpiob.pb7.into_alternate_af1(cs),
              gpioa.pa1.into_analog(cs),
              gpioa.pa2.into_analog(cs),
-             gpioa.pa3.into_floating_input(cs),
+             gpioa.pa3.into_pull_up_input(cs),
              gpioa.pa9.into_alternate_af1(cs),
              gpioa.pa10.into_alternate_af1(cs),
             )
@@ -181,7 +185,21 @@ const APP: () = {
         unsafe {
             cortex_m::peripheral::NVIC::unmask(Interrupt::TIM6_DAC);
             cortex_m::peripheral::NVIC::unmask(Interrupt::TIM14);
+            cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI2_3);
         }
+
+        let exti = _device.EXTI;
+        let syscfg = _device.SYSCFG;
+
+        // Do nothing to select pa3
+        // syscfg.exticr1.modify(|_, w| unsafe { w.exti1().bits(1) });
+
+        // Enable EXTI3
+        exti.imr.modify(|_, w| w.mr3().set_bit());
+
+        // Rising edge trigger
+        exti.rtsr.modify(|_, w| w.tr3().set_bit());
+
         let joystick_mid_x: u16 = adc.read(&mut joystick_x).unwrap();
         let joystick_mid_y: u16 = adc.read(&mut joystick_y).unwrap();
         init::LateResources {
@@ -201,6 +219,7 @@ const APP: () = {
                 joystick_mid_y,
             ),
             serial,
+            exti
         }
     }
 
@@ -281,6 +300,33 @@ const APP: () = {
         }
     }
 
+    #[task(binds = EXTI2_3, resources=[exti, &ball, &maze, delay])]
+    fn joystick_pressed(ctx: joystick_pressed::Context) {
+        let mut maze_generator = maze::MazeGenerator::new();
+        let point = ctx.resources.ball.to_point();
+        if point == ctx.resources.maze.end {
+            unsafe {
+                let ptr = ctx.resources.maze as *const maze::Maze as *mut maze::Maze;
+                let maze = &mut *ptr;
+
+                maze.start = maze.end;
+                let delay = ctx.resources.delay;
+                maze_generator.generate(maze, || {
+                    delay.delay_ms(2_u8);
+                });
+
+                let ball_ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
+                let ball = &mut *ball_ptr;
+
+                *ball = ball::Ball::from_point(&(maze.start));
+            }
+        }
+        // unsafe is ok here, idle is the only task requiring mutable access to maze.
+        // Needed because 0.5.1 version of cortex-m-rtfm does not support mixed resources access
+
+        ctx.resources.exti.pr.write(|w| w.pr3().set_bit());
+    }
+
     #[idle(resources = [&maze, &ball])]
     fn idle (ctx: idle::Context) -> ! {
         let mut maze_generator = maze::MazeGenerator::new();
@@ -291,7 +337,7 @@ const APP: () = {
             let ptr = ctx.resources.maze as *const maze::Maze as *mut maze::Maze;
             let maze = &mut *ptr;
 
-            maze_generator.generate(maze);
+            maze_generator.generate(maze, ||{});
 
             let ball_ptr = ctx.resources.ball as *const ball::Ball as *mut ball::Ball;
             let ball = &mut *ball_ptr;

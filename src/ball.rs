@@ -28,4 +28,10 @@ impl Ball {
             y: (p.y as u16 * 4 + 2) * PWMFrequency as u16,
         }
     }
+    pub(crate) fn to_point(&self, ) -> crate::maze::Point {
+        crate::maze::Point {
+            x: ((self.x / PWMFrequency as u16) / 4) as u8,
+            y: ((self.y / PWMFrequency as u16) / 4) as u8,
+        }
+    }
 }

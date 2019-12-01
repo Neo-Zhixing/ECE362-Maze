@@ -6,7 +6,7 @@ use rand::{Rng, SeedableRng};
 use crate::cell::Cell;
 use crate::display::PWMFrequency;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Point {
 	pub x: u8,
 	pub y: u8,
@@ -38,6 +38,10 @@ pub struct BitMap {
 	content: [[u8; (WIDTH/8) as usize]; HEIGHT as usize]
 }
 impl BitMap {
+	pub fn set_all(&mut self, value: bool) {
+		let value = if value {core::u8::MAX} else {0};
+		self.content = [[value; (WIDTH/8) as usize]; HEIGHT as usize];
+	}
 	pub(crate) fn new(value: bool) -> BitMap {
 		let value = if value {core::u8::MAX} else {0};
 		let maze = BitMap {
@@ -248,11 +252,10 @@ impl MazeGenerator {
 		}
 	}
 
-	pub fn generate(&mut self, maze: &mut Maze) {
-		let x: u8 = self.rng.gen();
-		let y: u8 = self.rng.gen();
-		// maze.start = Point { x: x >> 3, y: y >> 4 };
-		maze.start = Point { x: 0, y: 0 };
+	pub fn generate<F>(&mut self, maze: &mut Maze, mut delay: F)
+	where F: FnMut() -> () {
+		maze.bitmap_top.set_all(true);
+		maze.bitmap_left.set_all(true);
 		let mut current = maze.start;
 		let mut length: u16 = 0;
 		let mut maxlength: u16 = 0;
@@ -321,6 +324,7 @@ impl MazeGenerator {
 
 			let opposite_dir = MazeGenerator::bin_dir_opposite(dir_to_go);
 			self.state[current.y as usize][current.x as usize] |= opposite_dir << 4; // set the incoming edges
+			delay();
 		}
 	}
 }
