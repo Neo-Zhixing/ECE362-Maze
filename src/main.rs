@@ -76,8 +76,8 @@ const APP: () = {
         >,
 
         joystick: Joystick<
-            gpioa::PA1<Analog>,
             gpioa::PA2<Analog>,
+            gpioa::PA1<Analog>,
             gpioa::PA3<Input<PullUp>>,
         >,
         adc: hal::adc::Adc,
@@ -143,8 +143,8 @@ const APP: () = {
              gpioa.pa4.into_analog(cs),
              gpiob.pb6.into_alternate_af1(cs),
              gpiob.pb7.into_alternate_af1(cs),
-             gpioa.pa1.into_analog(cs),
              gpioa.pa2.into_analog(cs),
+             gpioa.pa1.into_analog(cs),
              gpioa.pa3.into_pull_up_input(cs),
              gpioa.pa9.into_alternate_af1(cs),
              gpioa.pa10.into_alternate_af1(cs),
@@ -247,8 +247,8 @@ const APP: () = {
         let mut valx: i16 = ctx.resources.joystick.mid_x as i16 - valx as i16;
         let mut valy: i16 = valy as i16 - ctx.resources.joystick.mid_y as i16;
 
-        valx /= 256;
-        valy /= 256;
+        valx /= 128;
+        valy /= 128;
 
         let mut newx: i16 = ball.x as i16 + valx;
         let mut newy: i16 = ball.y as i16 + valy;

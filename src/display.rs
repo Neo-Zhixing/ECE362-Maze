@@ -5,7 +5,7 @@ use cortex_m::interrupt::Mutex;
 use core::cell::RefCell;
 use crate::ball::Ball;
 
-pub(crate) const PWMFrequency: u8 = 8;
+pub(crate) const PWMFrequency: u8 = 32;
 
 pub(crate) fn draw_row<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>(
     port: &mut HUBPort<CLK, OEN, LT, A, B, C, R1, G1, B1, R2, G2, B2>,
