@@ -7,7 +7,7 @@ mod display;
 mod ball;
 mod joystick;
 mod cell;
-
+mod sounds;
 
 use panic_halt as _;
 
@@ -23,7 +23,7 @@ use core::cell::RefCell;
 use core::ops::DerefMut;
 use stm32f0::stm32f0x1::Interrupt;
 use rtfm::Mutex;
-use cortex_m::asm::wfi;
+use cortex_m::asm::{wfi, delay};
 
 
 use ssd1306::prelude::*;
@@ -47,6 +47,9 @@ const APP: () = {
 
         #[init(0)]
         current_row: u8,
+
+        #[init(false)]
+        mute: bool,
 
         hub_port: hub::HUBPort<
             gpiob::PB1<Output<PushPull>>,
@@ -81,7 +84,7 @@ const APP: () = {
             gpioa::PA3<Input<PullUp>>,
         >,
         adc: hal::adc::Adc,
-        dac: hal::dac::C1,
+        sounds: sounds::SoundController,
         serial: serial::Serial<
             stm32::USART1,
             gpioa::PA9<Alternate<hal::gpio::AF1>>,
@@ -99,6 +102,9 @@ const APP: () = {
         let mut _device: stm32::Peripherals = ctx.device;
 
         _device.RCC.apb2enr.modify(|_, w| w.syscfgen().set_bit());
+        _device.RCC.apb1enr.modify(|_, w| w.tim6en().set_bit());
+        _device.RCC.ahbenr.modify(|_, w| w.dmaen().set_bit());
+
 
         let mut rcc = _device.RCC.configure().sysclk(48.mhz()).freeze(&mut _device.FLASH);
 
@@ -162,8 +168,7 @@ const APP: () = {
 
 
         let mut dac = hal::dac::dac(_device.DAC, buz, &mut rcc);
-        dac.enable();
-        dac.set_value(4095);
+        let sounds = sounds::SoundController::new(dac);
 
         led_blue.set_high().ok();
 
@@ -175,7 +180,7 @@ const APP: () = {
         // Why 60 * 32? 120 Hertz is the refresh rate for high end screens, and we have 32 rows
         // This value needs to be as low as possible, otherwise CPU utilization rate would be too high
         // For us to do anything else useful.
-        let mut timer = hal::timers::Timer::tim6(_device.TIM6, hal::time::Hertz(120 * 32), &mut rcc);
+        let mut timer = hal::timers::Timer::tim15(_device.TIM15, hal::time::Hertz(120 * 32), &mut rcc);
         timer.listen(hal::timers::Event::TimeOut);
 
         let mut timer_input = hal::timers::Timer::tim14(_device.TIM14, hal::time::Hertz(100), &mut rcc);
@@ -183,7 +188,7 @@ const APP: () = {
 
         let mut nvic = _core.NVIC;
         unsafe {
-            cortex_m::peripheral::NVIC::unmask(Interrupt::TIM6_DAC);
+            cortex_m::peripheral::NVIC::unmask(Interrupt::TIM15);
             cortex_m::peripheral::NVIC::unmask(Interrupt::TIM14);
             cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI2_3);
         }
@@ -209,7 +214,7 @@ const APP: () = {
             led: led_blue,
             delay,
             display,
-            dac,
+            sounds,
             adc,
             joystick: Joystick::new(
                 joystick_x,
@@ -223,7 +228,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM6_DAC, resources=[current_row, &maze, &ball, hub_port], priority=10)]
+    #[task(binds = TIM15, resources=[current_row, &maze, &ball, hub_port], priority=10)]
     fn tick (ctx: tick::Context) {
         let current_row: &mut u8 = ctx.resources.current_row;
         let maze: &maze::Maze = ctx.resources.maze;
@@ -235,7 +240,7 @@ const APP: () = {
         *current_row += 1;
 
         unsafe {
-            stm32::Peripherals::steal().TIM6.sr.write(|w| w.uif().clear_bit());
+            stm32::Peripherals::steal().TIM15.sr.write(|w| w.uif().clear_bit());
         }
     }
 
@@ -300,17 +305,18 @@ const APP: () = {
         }
     }
 
-    #[task(binds = EXTI2_3, resources=[exti, &ball, &maze, delay])]
+    #[task(binds = EXTI2_3, resources=[exti, &ball, &maze, delay, sounds])]
     fn joystick_pressed(ctx: joystick_pressed::Context) {
         let mut maze_generator = maze::MazeGenerator::new();
         let point = ctx.resources.ball.to_point();
+        let delay = ctx.resources.delay;
         if point == ctx.resources.maze.end {
+            ctx.resources.sounds.enable(30);
             unsafe {
                 let ptr = ctx.resources.maze as *const maze::Maze as *mut maze::Maze;
                 let maze = &mut *ptr;
 
                 maze.start = maze.end;
-                let delay = ctx.resources.delay;
                 maze_generator.generate(maze, || {
                     delay.delay_ms(2_u8);
                 });
@@ -320,6 +326,18 @@ const APP: () = {
 
                 *ball = ball::Ball::from_point(&(maze.start));
             }
+            ctx.resources.sounds.disable();
+            delay.delay_ms(70u8);
+            for i in 0 .. 2 {
+                delay.delay_ms(30u8);
+                ctx.resources.sounds.enable(15);
+                delay.delay_ms(30u8);
+                ctx.resources.sounds.disable();
+            }
+        } else {
+            ctx.resources.sounds.enable(80);
+            delay.delay_ms(100u16);
+            ctx.resources.sounds.disable();
         }
         // unsafe is ok here, idle is the only task requiring mutable access to maze.
         // Needed because 0.5.1 version of cortex-m-rtfm does not support mixed resources access
