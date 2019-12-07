@@ -1,6 +1,16 @@
 # `cortex-m-quickstart`
 
-> A template for building applications for ARM Cortex-M microcontrollers
+This is a project which uses the STM32F05R8T6 microcrontroller to build a randomly generated maze using DFS and recursive backtracking algorithms custom tailored to this project. We also used a custom designed PCB to implement this design to give it a professional look.
+ 
+After deciding that we wanted to build a game, various ideas were hatched, and a maze was decided upon as it is a game that does not require quick reflexes, and isnt time based / constraint based. As mentioned before, the maze is generated using a DFS and recursive backtracking algorithms algorithm, and when a maze is completed, a sound plays and a new maze is generated, using the old maze's endpoint as the new mazes beginning.
+ 
+For this project, we used the STM32F05R8T6 microcontroller chip, and initially we were considering using a gyroscope, but ended up deciding to forgo it as would take more time than we could manage. The game is now controlled using an analog joystick with a button. To display the maze, we are using a 64 x 128 LED matrix, and a passive buzzer to play a sound when the maze is completed. Since we decided to make a PCB, we designed it using Autodesk Eagle, and used several surface mount o6o3 resistors and surface mount o6o3 decoupling capacitors to prevent noise and ensure smooth operation.
+
+We also used Rust instead of C to write this project as it was 
+
+One of the first problem we encountered was the algorithm to generate the maze.It was decided that the current DFS approach was suited to the project. The rest of the problems faced was PCB design, as it was quite tedious to make and verify each step of the PCB, and due to us being slightly behind on the design, finding a PCB fabricator was a bit hard but we did find one (JLCPCB) to supply us a few on time. We then had a few issues with soldering as it was a learning experience for us.
+
+If any other teams were to try this project, we would reccomend thoroughly looking at documentation for the parts that you are buying, as they may use different mechanisms than we may be accustomed to. In our case, we had a different mechanism to operate the LED display than we thought.
 
 This project is developed and maintained by the [Cortex-M team][team].
 
