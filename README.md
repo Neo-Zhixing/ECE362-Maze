@@ -1,18 +1,18 @@
-# `cortex-m-quickstart`
+# `ECE 362 Mini Project - Maze Game`
 
 This is a project which uses the STM32F05R8T6 microcrontroller to build a randomly generated maze using DFS and recursive backtracking algorithms custom tailored to this project. We also used a custom designed PCB to implement this design to give it a professional look.
  
 After deciding that we wanted to build a game, various ideas were hatched, and a maze was decided upon as it is a game that does not require quick reflexes, and isnt time based / constraint based. As mentioned before, the maze is generated using a DFS and recursive backtracking algorithms algorithm, and when a maze is completed, a sound plays and a new maze is generated, using the old maze's endpoint as the new mazes beginning.
  
-For this project, we used the STM32F05R8T6 microcontroller chip, and initially we were considering using a gyroscope, but ended up deciding to forgo it as would take more time than we could manage. The game is now controlled using an analog joystick with a button. To display the maze, we are using a 64 x 128 LED matrix, and a passive buzzer to play a sound when the maze is completed. Since we decided to make a PCB, we designed it using Autodesk Eagle, and used several surface mount o6o3 resistors and surface mount o6o3 decoupling capacitors to prevent noise and ensure smooth operation.
+For this project, we used the STM32F05R8T6 microcontroller chip, and initially we were considering using a gyroscope, but ended up deciding to forgo it as would take more time than we could manage. The game is now controlled using an analog joystick with a button. To display the maze, we are using a 64 x 128 LED matrix, and a passive buzzer to play a sound when the maze is completed. Since we decided to make a PCB, we designed it using Autodesk Eagle, and used several surface mount 0603 resistors and surface mount 0603 decoupling ceramic capacitors to prevent noise and ensure smooth operation.
 
-We also used Rust instead of C to write this project as it was 
+The programs for this project was coded in Rust, which ensures thread safety and memory safety with its unique ownership system.
 
-One of the first problem we encountered was the algorithm to generate the maze.It was decided that the current DFS approach was suited to the project. The rest of the problems faced was PCB design, as it was quite tedious to make and verify each step of the PCB, and due to us being slightly behind on the design, finding a PCB fabricator was a bit hard but we did find one (JLCPCB) to supply us a few on time. We then had a few issues with soldering as it was a learning experience for us.
+To accomodate the recursive backtracker algorithm to the limited 8K of RAM for the STM32 microcontroller, we modified the implementation of the recursive backtracker so that it runs iteratively, and takes up a fixed amount of RAM. It was also a learning experience for us to fabricate and solder the PCB components in the limited time given.
 
-If any other teams were to try this project, we would reccomend thoroughly looking at documentation for the parts that you are buying, as they may use different mechanisms than we may be accustomed to. In our case, we had a different mechanism to operate the LED display than we thought.
+If any other teams would like to use the LED matrix we've selected, it's important to remind them that the LED matrix works very differently compared to the standard. For a standard, 64 row LED matrix, you would have five row selection pins (ABCDE) connected to a demux to control which row you're currently displaying. Then, you would shift data into a group of 74HC595 shift registers. However, the LED matrix we bought from Taobao uses some different chips for its controlling circuits. The shift registers on the horizontal axis used 8*3*2 ChipOne ICND2038S chips (http://www.xlix.ru/datasheet/icn2038s.pdf), which are 16-channel shift registers with dual latch, optimized for LED current sinking. However, on the vertical axis, instead of a demux, it used 8 D5958SSP shift registers (http://www.dmax168.com/h-por-11-0_329_11.html), which are just regular 8-bit shift registers optimized for LED matrix. Note that the datasheet for D5958SSP is only available in Chinese, and you might notice that the images of the datasheet on the website I have given above has a very low resolution. To view the high resolution version of the datasheet, right click on the images, select "Copy Image Location", and remove the "!160x160.png" from the URL.
 
-This project is developed and maintained by the [Cortex-M team][team].
+Basically, to drive this LED matrix, you first shift in data for each row, and then for every 32 clock cycles, you pull the data input high on the vertical shift register. That way, you can scan the LED matrix in a way similiar to the original HUB75E products. On the modified HUB75E port, A => CLK, B => EN, C => DIN.
 
 ## Dependencies
 
@@ -31,13 +31,7 @@ To build embedded programs using this template you'll need:
 $ rustup target add thumbv6m-none-eabi thumbv7m-none-eabi thumbv7em-none-eabi thumbv7em-none-eabihf
 ```
 
-## Using this template
-
-**NOTE**: This is the very short version that only covers building programs. For
-the long version, which additionally covers flashing, running and debugging
-programs, check [the embedded Rust book][book].
-
-[book]: https://rust-embedded.github.io/book
+## Using this program
 
 0. Before we begin you need to identify some characteristics of the target
   device as these will be used to configure the project:
